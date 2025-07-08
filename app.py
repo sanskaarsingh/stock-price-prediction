@@ -42,7 +42,7 @@ symbol = st.sidebar.selectbox("Stock Symbol", DEFAULT_SYMBOLS)
 
 
 end_date = datetime.today()
-start_date = end_date - timedelta(days=365*2)  # Default 2 years of data
+start_date = end_date - timedelta(days=365*2)
 
 col1, col2 = st.sidebar.columns(2)
 with col1:
