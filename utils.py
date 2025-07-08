@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from dotenv import load_dotenv
 
-# Load environment variables
+
 load_dotenv()
 
 def get_marketstack_data(symbol, start_date, end_date):
@@ -33,23 +33,23 @@ def get_marketstack_data(symbol, start_date, end_date):
         
         df = pd.DataFrame(data['data'])
         
-        # Convert and clean data
+       
         df['date'] = pd.to_datetime(df['date'])
         df.set_index('date', inplace=True)
         df.sort_index(inplace=True)
         
-        # Remove unnecessary columns
+        
         cols_to_drop = ['symbol', 'exchange', 'adj_high', 'adj_low', 'adj_open', 
                        'split_factor', 'dividend']
         df = df.drop(columns=[col for col in cols_to_drop if col in df.columns], errors='ignore')
         
-        # Convert numeric columns
+        
         numeric_cols = ['open', 'high', 'low', 'close', 'adj_close', 'volume']
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
         
-        # Drop any remaining non-numeric columns
+        
         df = df.select_dtypes(include=[np.number])
         
         return df
@@ -65,36 +65,36 @@ def calculate_technical_indicators(df):
         if df.empty:
             return df
             
-        # Simple Moving Averages
+       
         df['SMA_5'] = df['close'].rolling(window=5).mean()
         df['SMA_10'] = df['close'].rolling(window=10).mean()
         df['SMA_20'] = df['close'].rolling(window=20).mean()
         
-        # Exponential Moving Averages
+        
         df['EMA_5'] = df['close'].ewm(span=5, adjust=False).mean()
         df['EMA_10'] = df['close'].ewm(span=10, adjust=False).mean()
         df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
         
-        # Relative Strength Index
+        
         delta = df['close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
         df['RSI'] = 100 - (100 / (1 + rs))
         
-        # Moving Average Convergence Divergence
+        
         ema_12 = df['close'].ewm(span=12, adjust=False).mean()
         ema_26 = df['close'].ewm(span=26, adjust=False).mean()
         df['MACD'] = ema_12 - ema_26
         df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
         
-        # Bollinger Bands
+        
         df['Middle_Band'] = df['close'].rolling(window=20).mean()
         std = df['close'].rolling(window=20).std()
         df['Upper_Band'] = df['Middle_Band'] + (std * 2)
         df['Lower_Band'] = df['Middle_Band'] - (std * 2)
         
-        # Drop rows with NaN values created by indicators
+       
         df.dropna(inplace=True)
         
         return df

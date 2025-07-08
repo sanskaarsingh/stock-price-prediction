@@ -17,13 +17,13 @@ def prepare_data(df, forecast_days=1):
         if df.empty:
             raise ValueError("Empty DataFrame provided")
             
-        # Create target (next day's closing price)
+        
         df['target'] = df['close'].shift(-forecast_days)
         
-        # Remove rows with NaN in target
+       
         df.dropna(subset=['target'], inplace=True)
         
-        # Features are all numeric columns except target
+       
         features = df.select_dtypes(include=[np.number]).drop(columns=['target'], errors='ignore')
         target = df['target']
         
@@ -40,15 +40,15 @@ def train_model(features, target, model_type='xgb'):
     Train and evaluate a machine learning model
     """
     try:
-        # Filter numeric features only
+       
         features = features.select_dtypes(include=[np.number])
         
-        # Split data into train and test sets
+        
         X_train, X_test, y_train, y_test = train_test_split(
             features, target, test_size=0.2, shuffle=False)
         
         if model_type == 'xgb':
-            # XGBoost model with reasonable defaults
+            
             model = Pipeline([
                 ('scaler', MinMaxScaler()),
                 ('xgb', XGBRegressor(
@@ -65,7 +65,7 @@ def train_model(features, target, model_type='xgb'):
             }
             
         elif model_type == 'rf':
-            # Random Forest model
+           
             model = Pipeline([
                 ('scaler', MinMaxScaler()),
                 ('rf', RandomForestRegressor(
@@ -82,7 +82,7 @@ def train_model(features, target, model_type='xgb'):
         else:
             raise ValueError(f"Unknown model type: {model_type}")
         
-        # Suppress warnings during grid search
+        
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             
@@ -99,15 +99,15 @@ def train_model(features, target, model_type='xgb'):
         
         best_model = grid_search.best_estimator_
         
-        # Evaluate the model
+        
         y_pred = best_model.predict(X_test)
         mae = mean_absolute_error(y_test, y_pred)
         rmse = np.sqrt(mean_squared_error(y_test, y_pred))
         
-        # Calculate confidence intervals using residuals
+       
         residuals = y_test - y_pred
         std_residuals = np.std(residuals)
-        confidence_interval = 1.96 * std_residuals  # 95% CI
+        confidence_interval = 1.96 * std_residuals  
         
         evaluation = {
             'model': best_model,
@@ -129,8 +129,7 @@ def predict_next_day(model, last_available_data, confidence_interval):
     Predict the next day's closing price with confidence interval
     """
     try:
-        # Prepare the last available data point for prediction
-        # Explicitly exclude the target column if it exists
+        
         last_data = last_available_data.select_dtypes(include=[np.number])
         if 'target' in last_data.columns:
             last_data = last_data.drop(columns=['target'])

@@ -14,11 +14,11 @@ load_dotenv()
 
 st.set_page_config(
     page_title="Stock Price Prediction",
-    page_icon="📈",
+    page_icon="📊",
     layout="wide"
 )
 
-# Add disclaimer
+
 st.sidebar.markdown("""
 **Disclaimer:**  
 This tool is for educational purposes only.  
@@ -26,21 +26,21 @@ Stock market predictions are inherently uncertain.
 Never make investment decisions based solely on algorithmic predictions.
 """)
 
-# Title and description
+
 st.title("🧠 Stock Price Prediction Tool")
 st.write("""
 This tool uses machine learning to predict stock prices based on historical data.
 Select a stock symbol and date range to train the model and get predictions.
 """)
 
-# Sidebar controls
+
 st.sidebar.header("Settings")
 
-# Get available symbols
+
 DEFAULT_SYMBOLS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'NFLX']
 symbol = st.sidebar.selectbox("Stock Symbol", DEFAULT_SYMBOLS)
 
-# Date range selection
+
 end_date = datetime.today()
 start_date = end_date - timedelta(days=365*2)  # Default 2 years of data
 
@@ -50,7 +50,7 @@ with col1:
 with col2:
     end_date = st.date_input("End Date", end_date)
 
-# Model selection
+
 model_type = st.sidebar.radio(
     "Select Model",
     ('xgb', 'rf'),
@@ -58,27 +58,27 @@ model_type = st.sidebar.radio(
     format_func=lambda x: 'XGBoost' if x == 'xgb' else 'Random Forest'
 )
 
-# Fetch data button
+
 fetch_button = st.sidebar.button("Fetch Data and Train Model")
 
-# Main content area
+
 if fetch_button:
     with st.spinner('Fetching data and training model...'):
         try:
-            # Fetch data
+           
             df = get_marketstack_data(symbol, start_date, end_date)
             
             if df.empty:
                 st.error("No data returned for the selected symbol and date range.")
             else:
-                # Calculate technical indicators
+                
                 df = calculate_technical_indicators(df)
                 
-                # Show raw data
+                
                 st.subheader(f"Historical Data for {symbol}")
                 st.dataframe(df.tail(10))
                 
-                # Plot historical prices
+                
                 fig1 = go.Figure()
                 fig1.add_trace(go.Scatter(
                     x=df.index, 
@@ -95,13 +95,13 @@ if fetch_button:
                 )
                 st.plotly_chart(fig1, use_container_width=True)
                 
-                # Prepare data for ML
+                
                 features, target = prepare_data(df)
                 
-                # Train model
+                
                 model_result = train_model(features, target, model_type)
                 
-                # Show model results
+                
                 st.subheader("Model Evaluation")
                 st.write(f"Model Type: {'XGBoost' if model_type == 'xgb' else 'Random Forest'}")
                 st.write(f"Mean Absolute Error (MAE): ${model_result['mae']:.2f}")
@@ -110,14 +110,14 @@ if fetch_button:
                 st.write("Best Hyperparameters:")
                 st.json(model_result['best_params'])
                 
-                # Make prediction for next day
+                
                 prediction = predict_next_day(
                     model_result['model'],
                     df,
                     model_result['confidence_interval']
                 )
                 
-                # Display prediction
+                
                 st.subheader("Next Day Prediction")
                 col1, col2, col3 = st.columns(3)
                 col1.metric(
@@ -138,22 +138,22 @@ if fetch_button:
                     delta_color="off"
                 )
                 
-                # Plot prediction with confidence interval
+                
                 last_date = df.index[-1]
                 next_date = last_date + pd.Timedelta(days=1)
                 
                 fig2 = go.Figure()
                 
-                # Historical data
+               
                 fig2.add_trace(go.Scatter(
-                    x=df.index[-30:],  # Last 30 days
+                    x=df.index[-30:],  
                     y=df['close'][-30:],
                     mode='lines',
                     name='Historical Close',
                     line=dict(color='royalblue')
                 ))
                 
-                # Prediction point
+       
                 fig2.add_trace(go.Scatter(
                     x=[next_date],
                     y=[prediction['predicted_price']],
@@ -162,7 +162,7 @@ if fetch_button:
                     marker=dict(color='green', size=10)
                 ))
                 
-                # Confidence interval
+                
                 fig2.add_trace(go.Scatter(
                     x=[next_date, next_date],
                     y=[prediction['lower_bound'], prediction['upper_bound']],
@@ -181,7 +181,7 @@ if fetch_button:
                 
                 st.plotly_chart(fig2, use_container_width=True)
                 
-                # Feature importance plot
+               
                 if 'feature_names' in model_result:
                     try:
                         if hasattr(model_result['model'].named_steps[model_type], 'feature_importances_'):
@@ -213,7 +213,7 @@ if fetch_button:
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")
 
-# Add some instructions when the app first loads
+
 if not fetch_button:
     st.info("""
     **Instructions:**
