@@ -7,18 +7,120 @@ from utils import get_marketstack_data, calculate_technical_indicators
 from models import prepare_data, train_model, predict_next_day
 import os
 from dotenv import load_dotenv
+import requests
+from textblob import TextBlob
+from dateutil import parser
 
-
+# Load environment variables
 load_dotenv()
 
-
+# Configure page
 st.set_page_config(
-    page_title="Stock Price Prediction",
+    page_title="Stock Prediction Pro",
     page_icon="📊",
     layout="wide"
 )
 
+# --- Helper Functions ---
+def analyze_sentiment(text):
+    """Returns sentiment polarity (-1 to 1) and classification"""
+    analysis = TextBlob(text)
+    polarity = analysis.sentiment.polarity
+    if polarity > 0.1:
+        return polarity, "positive"
+    elif polarity < -0.1:
+        return polarity, "negative"
+    else:
+        return polarity, "neutral"
+    
+def fetch_marketaux_news(ticker):
+    """Fetch financial news from Marketaux API"""
+    api_key = os.getenv("MARKETAUX_API_KEY")
+    url = f"https://api.marketaux.com/v1/news/all?symbols={ticker}&filter_entities=true&language=en&api_token={api_key}"
+    
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("data", [])
+        st.error(f"News API Error: {response.status_code}")
+    except Exception as e:
+        st.error(f"Failed to fetch news: {str(e)}")
+    return []
 
+def display_news(news_data):
+    """Render news cards with sentiment indicators"""
+    for item in news_data:
+        with st.container():
+            try:
+                # Sentiment analysis
+                polarity, sentiment = analyze_sentiment(item["title"] + " " + item["description"])
+                
+                # Color coding
+                sentiment_color = {
+                    "positive": "#4CAF50",  # Green
+                    "negative": "#F44336",   # Red
+                    "neutral": "#FFC107"    # Yellow
+                }.get(sentiment, "#000000")
+                
+                # Card layout
+                col1, col2 = st.columns([0.85, 0.15])
+                
+                with col1:
+                    # Sentiment indicator dot
+                    st.markdown(f"""
+                    <div style="display: flex; align-items: center;">
+                        <div style="
+                            height: 12px;
+                            width: 12px;
+                            background-color: {sentiment_color};
+                            border-radius: 50%;
+                            margin-right: 8px;
+                        "></div>
+                        <h4 style="margin: 0;">{item['title']}</h4>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    st.caption(f"{item['source']} · {parser.parse(item['published_at']).strftime('%b %d, %Y %I:%M %p')}")
+                    st.write(item["description"])
+                    st.markdown(f"[Read more]({item['url']})")
+                
+                with col2:
+                    # Sentiment meter with transparent background
+                    st.markdown(f"""
+                    <div style="
+                        background: rgba(0, 0, 0, 0) !important;  /* Fully transparent */
+                        border-radius: 10px;
+                        padding: 5px;
+                        margin-top: 10px;
+                        border: 0px solid {sentiment_color};  /* Optional: Add border for visibility */
+                    ">
+                        <div style="
+                            width: {abs(polarity)*100}%;
+                            height: 20px;
+                            background: {sentiment_color};
+                            border-radius: 8px;
+                            margin-left: {50-(abs(polarity)*50)}%;
+                        "></div>
+                        <p style="
+                            text-align: center; 
+                            margin: 5px 0; 
+                            font-weight: bold; 
+                            color: {sentiment_color};
+                            text-shadow: 0 0 2px #000;  /* Improves text readability */
+                        ">
+                            {sentiment.upper()}
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                st.divider()
+            
+            except Exception as e:
+                st.warning(f"Couldn't process news item: {str(e)}")
+                continue
+
+# --- UI Layout ---
 st.sidebar.markdown("""
 **Disclaimer:**  
 This tool is for educational purposes only.  
@@ -26,20 +128,17 @@ Stock market predictions are inherently uncertain.
 Never make investment decisions based solely on algorithmic predictions.
 """)
 
-
-st.title("🧠 Stock Price Prediction Tool")
+st.title("🧠 Stock Prediction 2.0")
 st.write("""
-This tool uses machine learning to predict stock prices based on historical data.
-Select a stock symbol and date range to train the model and get predictions.
+Advanced stock price prediction with market news analysis.
+Select a stock symbol and date range to get started.
 """)
 
-
+# Sidebar Configuration
 st.sidebar.header("Settings")
-
 
 DEFAULT_SYMBOLS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'NFLX']
 symbol = st.sidebar.selectbox("Stock Symbol", DEFAULT_SYMBOLS)
-
 
 end_date = datetime.today()
 start_date = end_date - timedelta(days=365*2)
@@ -50,7 +149,6 @@ with col1:
 with col2:
     end_date = st.date_input("End Date", end_date)
 
-
 model_type = st.sidebar.radio(
     "Select Model",
     ('xgb', 'rf'),
@@ -58,27 +156,25 @@ model_type = st.sidebar.radio(
     format_func=lambda x: 'XGBoost' if x == 'xgb' else 'Random Forest'
 )
 
-
 fetch_button = st.sidebar.button("Fetch Data and Train Model")
 
-
+# Main Content
 if fetch_button:
     with st.spinner('Fetching data and training model...'):
         try:
-           
+            # --- Stock Data Section ---
             df = get_marketstack_data(symbol, start_date, end_date)
             
             if df.empty:
                 st.error("No data returned for the selected symbol and date range.")
             else:
-                
                 df = calculate_technical_indicators(df)
                 
-                
+                # Historical Data - Always Visible
                 st.subheader(f"Historical Data for {symbol}")
                 st.dataframe(df.tail(10))
                 
-                
+                # Price Chart
                 fig1 = go.Figure()
                 fig1.add_trace(go.Scatter(
                     x=df.index, 
@@ -95,13 +191,11 @@ if fetch_button:
                 )
                 st.plotly_chart(fig1, use_container_width=True)
                 
-                
+                # Model Training
                 features, target = prepare_data(df)
-                
-                
                 model_result = train_model(features, target, model_type)
                 
-                
+                # Model Evaluation
                 st.subheader("Model Evaluation")
                 st.write(f"Model Type: {'XGBoost' if model_type == 'xgb' else 'Random Forest'}")
                 st.write(f"Mean Absolute Error (MAE): ${model_result['mae']:.2f}")
@@ -110,13 +204,12 @@ if fetch_button:
                 st.write("Best Hyperparameters:")
                 st.json(model_result['best_params'])
                 
-                
+                # Prediction
                 prediction = predict_next_day(
                     model_result['model'],
                     df,
                     model_result['confidence_interval']
                 )
-                
                 
                 st.subheader("Next Day Prediction")
                 col1, col2, col3 = st.columns(3)
@@ -138,22 +231,18 @@ if fetch_button:
                     delta_color="off"
                 )
                 
-                
+                # Prediction Visualization
                 last_date = df.index[-1]
                 next_date = last_date + pd.Timedelta(days=1)
                 
                 fig2 = go.Figure()
-                
-               
                 fig2.add_trace(go.Scatter(
                     x=df.index[-30:],  
                     y=df['close'][-30:],
                     mode='lines',
                     name='Historical Close',
-                    line=dict(color='royalblue')
+                    line=dict(color='green')
                 ))
-                
-       
                 fig2.add_trace(go.Scatter(
                     x=[next_date],
                     y=[prediction['predicted_price']],
@@ -161,8 +250,6 @@ if fetch_button:
                     name='Prediction',
                     marker=dict(color='green', size=10)
                 ))
-                
-                
                 fig2.add_trace(go.Scatter(
                     x=[next_date, next_date],
                     y=[prediction['lower_bound'], prediction['upper_bound']],
@@ -170,7 +257,6 @@ if fetch_button:
                     name='Confidence Interval',
                     line=dict(color='gray', width=2, dash='dash')
                 ))
-                
                 fig2.update_layout(
                     title=f"{symbol} Price Prediction for {next_date.strftime('%Y-%m-%d')}",
                     xaxis_title="Date",
@@ -178,10 +264,9 @@ if fetch_button:
                     hovermode="x unified",
                     showlegend=True
                 )
-                
                 st.plotly_chart(fig2, use_container_width=True)
                 
-               
+                # Feature Importance
                 if 'feature_names' in model_result:
                     try:
                         if hasattr(model_result['model'].named_steps[model_type], 'feature_importances_'):
@@ -209,12 +294,44 @@ if fetch_button:
                             st.plotly_chart(fig3, use_container_width=True)
                     except Exception as e:
                         st.warning(f"Could not display feature importance: {str(e)}")
+            
+            # --- News Section ---
+            st.markdown("---")
+            st.subheader(f"Latest {symbol} News")
+            news_data = fetch_marketaux_news(symbol)
+            if news_data:
+                display_news(news_data[:5])  # Show top 5 news articles
+            if news_data:
+                st.subheader("Predicted News Impact")
+    
+                # Aggregate sentiment
+                total_impact = sum(analyze_sentiment(n["title"] + " " + n["description"])[0] for n in news_data[:5])
+                impact_percent = min(max(total_impact * 2, -5), 5)  # Cap at ±5%
+    
+                if abs(impact_percent) > 0.5:  # Only show significant impact
+                    direction = "increase" if impact_percent > 0 else "decrease"
+                    col1, col2 = st.columns(2)
+        
+                    with col1:
+                        st.metric(
+                            label="Predicted Price Impact",
+                            value=f"{abs(impact_percent):.1f}% {direction}",
+                            delta_color="inverse" if impact_percent < 0 else "normal"
+            )
+        
+                    with col2:
+                        st.write("""
+                            *Based on sentiment analysis of recent news.
+                            Actual market movement may vary.*
+                            """)
+            else:
+                st.warning("No recent news found for this stock")
         
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")
 
-
-if not fetch_button:
+else:
+    # Default landing page
     st.info("""
     **Instructions:**
     1. Select a stock symbol from the sidebar
@@ -228,3 +345,12 @@ if not fetch_button:
     The models are trained on the fly with your selected parameters.  
     For more accurate predictions, consider using a longer historical period.
     """)
+
+    # Sample news preview
+    st.subheader("Try these popular stocks:")
+    cols = st.columns(4)
+    for i, sym in enumerate(DEFAULT_SYMBOLS[:4]):
+        with cols[i]:
+            if st.button(sym):
+                st.session_state.symbol = sym
+                st.rerun()

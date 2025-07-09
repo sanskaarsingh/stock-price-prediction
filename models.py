@@ -8,144 +8,75 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV
 import warnings
+from datetime import datetime
 
 def prepare_data(df, forecast_days=1):
-    """
-    Prepare data for machine learning by creating features and target
-    """
-    try:
-        if df.empty:
-            raise ValueError("Empty DataFrame provided")
-            
-        
-        df['target'] = df['close'].shift(-forecast_days)
-        
-       
-        df.dropna(subset=['target'], inplace=True)
-        
-       
-        features = df.select_dtypes(include=[np.number]).drop(columns=['target'], errors='ignore')
-        target = df['target']
-        
-        if features.empty or len(target) == 0:
-            raise ValueError("No valid features or target after preprocessing")
-            
-        return features, target
-        
-    except Exception as e:
-        raise ValueError(f"Error preparing data: {str(e)}")
+    """Prepare features and target variable for training"""
+    df = df.copy()
+    df['target'] = df['close'].shift(-forecast_days)  # Shift prices forward
+    df.dropna(subset=['target'], inplace=True)
+    features = df.select_dtypes(include=[np.number]).drop(columns=['target'], errors='ignore')
+    return features, df['target']
 
 def train_model(features, target, model_type='xgb'):
-    """
-    Train and evaluate a machine learning model
-    """
-    try:
-       
-        features = features.select_dtypes(include=[np.number])
-        
-        
-        X_train, X_test, y_train, y_test = train_test_split(
-            features, target, test_size=0.2, shuffle=False)
-        
-        if model_type == 'xgb':
-            
-            model = Pipeline([
-                ('scaler', MinMaxScaler()),
-                ('xgb', XGBRegressor(
-                    objective='reg:squarederror',
-                    n_estimators=100,
-                    random_state=42
-                ))
-            ])
-            
-            param_grid = {
-                'xgb__max_depth': [3, 5],
-                'xgb__learning_rate': [0.01, 0.1],
-                'xgb__subsample': [0.8, 1.0]
-            }
-            
-        elif model_type == 'rf':
-           
-            model = Pipeline([
-                ('scaler', MinMaxScaler()),
-                ('rf', RandomForestRegressor(
-                    n_estimators=100,
-                    random_state=42
-                ))
-            ])
-            
-            param_grid = {
-                'rf__max_depth': [None, 5],
-                'rf__min_samples_split': [2, 5]
-            }
-            
-        else:
-            raise ValueError(f"Unknown model type: {model_type}")
-        
-        
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            
-            grid_search = GridSearchCV(
-                estimator=model,
-                param_grid=param_grid,
-                cv=3,
-                scoring='neg_mean_squared_error',
-                verbose=0,
-                error_score='raise'
-            )
-            
-            grid_search.fit(X_train, y_train)
-        
-        best_model = grid_search.best_estimator_
-        
-        
-        y_pred = best_model.predict(X_test)
-        mae = mean_absolute_error(y_test, y_pred)
-        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-        
-       
-        residuals = y_test - y_pred
-        std_residuals = np.std(residuals)
-        confidence_interval = 1.96 * std_residuals  
-        
-        evaluation = {
-            'model': best_model,
-            'mae': mae,
-            'rmse': rmse,
-            'confidence_interval': confidence_interval,
-            'residuals_std': std_residuals,
-            'best_params': grid_search.best_params_,
-            'feature_names': features.columns.tolist()
+    """Train and evaluate the model"""
+    X_train, X_test, y_train, y_test = train_test_split(
+        features, target, test_size=0.2, shuffle=False
+    )
+    
+    if model_type == 'xgb':
+        model = Pipeline([
+            ('scaler', MinMaxScaler()),
+            ('xgb', XGBRegressor(objective='reg:squarederror', random_state=42))
+        ])
+        param_grid = {
+            'xgb__max_depth': [3, 5],
+            'xgb__learning_rate': [0.01, 0.1],
         }
-        
-        return evaluation
-        
-    except Exception as e:
-        raise ValueError(f"Model training failed: {str(e)}")
+    elif model_type == 'rf':
+        model = Pipeline([
+            ('scaler', MinMaxScaler()),
+            ('rf', RandomForestRegressor(random_state=42))
+        ])
+        param_grid = {
+            'rf__max_depth': [5, 10],  # Removed None to avoid NULL display
+            'rf__min_samples_split': [2, 5],
+        }
+    
+    grid_search = GridSearchCV(model, param_grid, cv=3, scoring='neg_mean_squared_error')
+    grid_search.fit(X_train, y_train)
+    
+    # Calculate metrics
+    y_pred = grid_search.predict(X_test)
+    mae = mean_absolute_error(y_test, y_pred)
+    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+    ci = 1.96 * np.std(y_test - y_pred)  # 95% confidence interval
+    
+    return {
+        'model': grid_search.best_estimator_,
+        'mae': mae,
+        'rmse': rmse,
+        'confidence_interval': ci,
+        'best_params': grid_search.best_params_,
+    }
 
 def predict_next_day(model, last_available_data, confidence_interval):
-    """
-    Predict the next day's closing price with confidence interval
-    """
+    """Predict today's closing price using the latest available data"""
     try:
+        # Prepare last available features
+        features = last_available_data.select_dtypes(include=[np.number])
+        if 'target' in features.columns:
+            features = features.drop(columns=['target'])
+        features = features.iloc[-1:]  # Most recent data
         
-        last_data = last_available_data.select_dtypes(include=[np.number])
-        if 'target' in last_data.columns:
-            last_data = last_data.drop(columns=['target'])
-        last_data = last_data.iloc[-1:].copy()
-        
-        if last_data.empty:
-            raise ValueError("No valid data for prediction")
-            
-        # Make prediction
-        predicted_price = model.predict(last_data)[0]
+        # Predict today's price
+        predicted_price = model.predict(features)[0]
         
         return {
+            'prediction_date': datetime.today().strftime('%Y-%m-%d'),
             'predicted_price': predicted_price,
             'upper_bound': predicted_price + confidence_interval,
-            'lower_bound': predicted_price - confidence_interval
+            'lower_bound': predicted_price - confidence_interval,
         }
-        
     except Exception as e:
         raise ValueError(f"Prediction failed: {str(e)}")
