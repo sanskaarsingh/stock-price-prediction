@@ -11,17 +11,17 @@ import requests
 from textblob import TextBlob
 from dateutil import parser
 
-# Load environment variables
+
 load_dotenv()
 
-# Configure page
+
 st.set_page_config(
     page_title="Stock Prediction Pro",
     page_icon="📊",
     layout="wide"
 )
 
-# --- Helper Functions ---
+
 def analyze_sentiment(text):
     """Returns sentiment polarity (-1 to 1) and classification"""
     analysis = TextBlob(text)
@@ -53,21 +53,21 @@ def display_news(news_data):
     for item in news_data:
         with st.container():
             try:
-                # Sentiment analysis
+                
                 polarity, sentiment = analyze_sentiment(item["title"] + " " + item["description"])
                 
-                # Color coding
+               
                 sentiment_color = {
-                    "positive": "#4CAF50",  # Green
-                    "negative": "#F44336",   # Red
-                    "neutral": "#FFC107"    # Yellow
+                    "positive": "#4CAF50",  
+                    "negative": "#F44336",   
+                    "neutral": "#FFC107"   
                 }.get(sentiment, "#000000")
                 
-                # Card layout
+                
                 col1, col2 = st.columns([0.85, 0.15])
                 
                 with col1:
-                    # Sentiment indicator dot
+                   
                     st.markdown(f"""
                     <div style="display: flex; align-items: center;">
                         <div style="
@@ -86,7 +86,7 @@ def display_news(news_data):
                     st.markdown(f"[Read more]({item['url']})")
                 
                 with col2:
-                    # Sentiment meter with transparent background
+                    
                     st.markdown(f"""
                     <div style="
                         background: rgba(0, 0, 0, 0) !important;  /* Fully transparent */
@@ -120,7 +120,7 @@ def display_news(news_data):
                 st.warning(f"Couldn't process news item: {str(e)}")
                 continue
 
-# --- UI Layout ---
+
 st.sidebar.markdown("""
 **Disclaimer:**  
 This tool is for educational purposes only.  
@@ -134,7 +134,7 @@ Advanced stock price prediction with market news analysis.
 Select a stock symbol and date range to get started.
 """)
 
-# Sidebar Configuration
+
 st.sidebar.header("Settings")
 
 DEFAULT_SYMBOLS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'NFLX']
@@ -158,11 +158,11 @@ model_type = st.sidebar.radio(
 
 fetch_button = st.sidebar.button("Fetch Data and Train Model")
 
-# Main Content
+
 if fetch_button:
     with st.spinner('Fetching data and training model...'):
         try:
-            # --- Stock Data Section ---
+           
             df = get_marketstack_data(symbol, start_date, end_date)
             
             if df.empty:
@@ -170,11 +170,11 @@ if fetch_button:
             else:
                 df = calculate_technical_indicators(df)
                 
-                # Historical Data - Always Visible
+                
                 st.subheader(f"Historical Data for {symbol}")
                 st.dataframe(df.tail(10))
                 
-                # Price Chart
+                
                 fig1 = go.Figure()
                 fig1.add_trace(go.Scatter(
                     x=df.index, 
@@ -191,11 +191,11 @@ if fetch_button:
                 )
                 st.plotly_chart(fig1, use_container_width=True)
                 
-                # Model Training
+               
                 features, target = prepare_data(df)
                 model_result = train_model(features, target, model_type)
                 
-                # Model Evaluation
+               
                 st.subheader("Model Evaluation")
                 st.write(f"Model Type: {'XGBoost' if model_type == 'xgb' else 'Random Forest'}")
                 st.write(f"Mean Absolute Error (MAE): ${model_result['mae']:.2f}")
@@ -204,7 +204,7 @@ if fetch_button:
                 st.write("Best Hyperparameters:")
                 st.json(model_result['best_params'])
                 
-                # Prediction
+                
                 prediction = predict_next_day(
                     model_result['model'],
                     df,
@@ -231,7 +231,7 @@ if fetch_button:
                     delta_color="off"
                 )
                 
-                # Prediction Visualization
+                
                 last_date = df.index[-1]
                 next_date = last_date + pd.Timedelta(days=1)
                 
@@ -266,7 +266,7 @@ if fetch_button:
                 )
                 st.plotly_chart(fig2, use_container_width=True)
                 
-                # Feature Importance
+                
                 if 'feature_names' in model_result:
                     try:
                         if hasattr(model_result['model'].named_steps[model_type], 'feature_importances_'):
@@ -295,20 +295,20 @@ if fetch_button:
                     except Exception as e:
                         st.warning(f"Could not display feature importance: {str(e)}")
             
-            # --- News Section ---
+            
             st.markdown("---")
             st.subheader(f"Latest {symbol} News")
             news_data = fetch_marketaux_news(symbol)
             if news_data:
-                display_news(news_data[:5])  # Show top 5 news articles
+                display_news(news_data[:5])  
             if news_data:
                 st.subheader("Predicted News Impact")
     
-                # Aggregate sentiment
+               
                 total_impact = sum(analyze_sentiment(n["title"] + " " + n["description"])[0] for n in news_data[:5])
-                impact_percent = min(max(total_impact * 2, -5), 5)  # Cap at ±5%
+                impact_percent = min(max(total_impact * 2, -5), 5) 
     
-                if abs(impact_percent) > 0.5:  # Only show significant impact
+                if abs(impact_percent) > 0.5: 
                     direction = "increase" if impact_percent > 0 else "decrease"
                     col1, col2 = st.columns(2)
         
@@ -331,7 +331,7 @@ if fetch_button:
             st.error(f"An error occurred: {str(e)}")
 
 else:
-    # Default landing page
+    
     st.info("""
     **Instructions:**
     1. Select a stock symbol from the sidebar
@@ -346,7 +346,7 @@ else:
     For more accurate predictions, consider using a longer historical period.
     """)
 
-    # Sample news preview
+   
     st.subheader("Try these popular stocks:")
     cols = st.columns(4)
     for i, sym in enumerate(DEFAULT_SYMBOLS[:4]):

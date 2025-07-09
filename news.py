@@ -9,7 +9,7 @@ def fetch_marketaux_news(api_key, ticker="AAPL", limit=3):
         response = requests.get(url)
         if response.status_code == 200:
             data = response.json()
-            return data["data"][:limit]  # Return top news items
+            return data["data"][:limit]  
         else:
             st.error(f"API Error: {response.status_code}")
             return []
